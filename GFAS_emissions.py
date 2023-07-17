@@ -1,8 +1,9 @@
 import json
 import gribapi as ga
 import pandas as pd
+import numpy as np
 
-# dominant land cover class according to map values -> [0:7]
+# dominant land cover class according to map -> map index to [1:8]!
 LCC = ('SA', 'SAOS', 'AG', 'AGOS', 'TF', 'PEAT', 'EF', 'EFOS')
 
 def read_ef_cvs(fname, write_json=False):
@@ -96,7 +97,7 @@ def read_ef_cvs(fname, write_json=False):
         
     return ef
     
-def GFAS_emissions(dm_fname, emi_fname, dlc_fname, ef_fname):
+def GFAS_emissions(dm_fname, dlc_fname, ef_fname):
     
     # read field of combustion rate, resp. dry matter burnt
     with open(dm_fname, 'r') as fp:
@@ -106,27 +107,37 @@ def GFAS_emissions(dm_fname, emi_fname, dlc_fname, ef_fname):
 
     # read land cover map
     with open(dlc_fname, 'r') as fp:
-        dlc = ga.grib_new_from_file(fp)
-    assert(ga.grib_get(dlc, 'paramId') == 94)
+        dlcmsg = ga.grib_new_from_file(fp)
+    assert(ga.grib_get(dlcmsg, 'paramId') == 94)
+    dlc = ga.grib_get_values(dlcmsg)
 
     # read species emission factors
     ef = read_ef_cvs(ef_fname)
 
-    # empty output file
-    with open(emi_fname, 'w') as fp:
-        pass
+    # loop over land cover types
+    for il, l in enumerate(LCC):
 
-    # loop over species
-    for s in ['nox','co','nh3']:
+        # empty output file
+        out_fname = f'Andreae19overGFASv1p2_{l}.grb'
+        with open(out_fname, 'w') as fp:
+            pass
+
+        # loop over species
+        for s in ['nox','co','nh3']:
         
-        # calculate species emission fluxes
-        emi = ga.grib_clone(dm)
-        ga.grib_set(emi, 'shortName', s+'fire')
-        print(ga.grib_get(emi, 'paramId'), ga.grib_get(emi, 'shortName'), ga.grib_get(emi, 'name'))
+            # calculate ratios of emission factors
+            emi = ga.grib_clone(dlcmsg)
+            ga.grib_set(emi, 'shortName', s+'fire')
+            #print(f'processing {ga.grib_get(emi,"paramId")} - {ga.grib_get(emi,"shortName")} in {l}...')
+            val = ga.grib_get_values(emi)
+            ratio = ef['a19'][s][l] / ef['v1p2'][s][l]
+            print(f'ratio of {s} in {l}: {ratio}')
+            val = np.where(np.abs(il+1-dlc)<.1, ratio, 1)
+            ga.grib_set_values(emi, val)
+            
+            # write species emission fluxes
+            with open(out_fname, 'ab') as fp:
+                ga.grib_write(emi, fp)
 
-        # write species emission fluxes
-        with open(emi_fname, 'ab') as fp:
-            ga.grib_write(emi, fp)
-    
 if __name__ == '__main__':
-    GFAS_emissions('fields.grb', 'emi.grb', 'dat/dlc.grb', 'dat/Table2_GFAS_vs_A19_EF_summary_longformat.csv')
+    GFAS_emissions('fields.grb', 'dat/dlc.grb', 'dat/Table2_GFAS_vs_A19_EF_summary_longformat.csv')
