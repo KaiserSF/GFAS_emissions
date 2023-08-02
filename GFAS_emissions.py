@@ -96,7 +96,21 @@ def read_ef_cvs(fname, write_json=True):
     return ef
     
 def GFAS_emissions(dm_fname, dlc_fname, ef_fname, action='emission'):
+    '''
+    calculate various species emissions from dry matter burnt field (GRIB shortName="crfire")
+    based on emission factors from Andreae & Merlet 2001 and Andreae 2019
+    and/or calculate ratios of the emission factors (A&M2019 / A2001)
     
+    Arguments:
+        dm_fname: file name of grib input field of dry matter burnt
+        dlc_fname: file name of GFAS land cover field
+        ef_name: file name of emission factor table by CAMS_44 (de Jong et al.)
+        action: "emission" or "ratio" or combination therefore to determine calculation
+    Output:
+        emissions and/or ratios for each land cover type and chemical species in various files
+    Return:
+        None
+    '''
     # read land cover map
     with open(dlc_fname, 'r') as fp:
         dlcmsg = ga.grib_new_from_file(fp)
@@ -173,6 +187,9 @@ def GFAS_emissions(dm_fname, dlc_fname, ef_fname, action='emission'):
                 # write species emission fluxes
                 with open(out_fname, 'ab') as fp:
                     ga.grib_write(emi, fp)
+                    
+    return None
 
 if __name__ == '__main__':
+    # The first argument is the input field of dry matter burnt, resp. crfire.
     GFAS_emissions('ADSfields.grib', 'dat/dlc.grb', 'dat/Table2_GFAS_vs_A19_EF_summary_longformat.csv', 'ratio+emissions')
